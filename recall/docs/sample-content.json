@@ -1,0 +1,47 @@
+{
+  "deck": "Learning science (sample)",
+  "items": [
+    {
+      "prompt": "What is the testing effect?",
+      "answer": "Recalling information from memory improves later retention more than re-reading it.",
+      "explanation": "Testing is a learning event, not just a measurement of one.",
+      "source": "Roediger & Karpicke (2006)",
+      "tags": ["testing", "core"]
+    },
+    {
+      "prompt": "Testing effect in real classrooms: effect size?",
+      "answer": "g = 0.499, from 222 studies with 48,478 students.",
+      "explanation": "Yang et al. (2021), Psychological Bulletin.",
+      "source": "Yang et al. (2021)",
+      "tags": ["testing", "evidence"]
+    },
+    {
+      "prompt": "How far apart should two study sessions be?",
+      "answer": "Roughly 20-40% of how long you need to remember it; ~5-10% for a one-year horizon.",
+      "explanation": "Optimal gap grows with the test delay but shrinks as a share of it.",
+      "source": "Cepeda et al. (2008)",
+      "tags": ["spacing"]
+    },
+    {
+      "prompt": "When does interleaving hurt learning?",
+      "answer": "For unrelated word lists — blocking is better there.",
+      "explanation": "Interleaving helps when you must discriminate between similar categories.",
+      "source": "Brunmair & Richter (2019)",
+      "tags": ["interleaving"]
+    },
+    {
+      "prompt": "Which two study techniques did Dunlosky et al. rate 'high utility'?",
+      "answer": "Practice testing and distributed practice.",
+      "explanation": "Highlighting, rereading and summarisation were rated low utility.",
+      "source": "Dunlosky et al. (2013)",
+      "tags": ["ranking"]
+    },
+    {
+      "prompt": "FSRS: what does stability (S) mean?",
+      "answer": "The interval in days at which your recall probability is 90%.",
+      "explanation": "Every successful review increases S; difficulty sets how fast.",
+      "source": "FSRS specification",
+      "tags": ["scheduler"]
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+# Local data: your cards and your review history. Never committed.
+learning.db
+learning.db-wal
+learning.db-shm
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Generated screenshots
+docs/screenshots/

@@ -7,7 +7,7 @@ because the access token behind the sandbox is scoped to this one repository.
 Think of it as **repos inside a repo**: one folder per project, each folder shaped like
 its own little repository.
 
-Last updated: 2026-11-06
+Last updated: 2026-11-07
 
 ---
 
@@ -70,6 +70,7 @@ Rules for the layout:
 | Project | What it is | Path |
 | --- | --- | --- |
 | hello-world | The first test upload: a minimal Python hello world script | [`hello-world/`](hello-world/) |
+| recall | Spaced-repetition app for learning cards: pure Python (tkinter + SQLite), FSRS-4.5 scheduler, no dependencies | [`recall/`](recall/) |
 
 Keep this table up to date whenever a project is added.
 
