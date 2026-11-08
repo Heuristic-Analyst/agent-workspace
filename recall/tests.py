@@ -237,6 +237,25 @@ def test_forecast_and_heatmap():
     print("  forecast + heatmap ok")
 
 
+def test_graded_card_does_not_come_back_immediately():
+    """A card in its learning step must not be shown again before it is due."""
+    db, s = fresh()
+    deck = db.decks()[0]
+    first = add(db, deck["id"], "first", "A")
+    add(db, deck["id"], "second", "B")
+    for rating in (1, 2, 3):                       # Again, Hard, Good on a new card
+        card = db.card(first["id"])
+        s.grade(card, rating)
+        nxt = db.next_card()
+        assert nxt is not None and nxt["id"] != first["id"], (
+            f"rating {rating}: the card just graded came straight back")
+    # once the step is over it is due again and jumps the queue
+    db.conn.execute("UPDATE card SET due=? WHERE id=?", (time.time() - 1, first["id"]))
+    db.conn.commit()
+    assert db.next_card()["id"] == first["id"]
+    print("  a graded learning card stays out until its step is over")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     print(f"running {len(tests)} tests")

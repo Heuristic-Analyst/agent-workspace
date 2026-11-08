@@ -12,7 +12,8 @@ import time
 from datetime import date, datetime, timedelta
 
 SCHEMA_VERSION = 1
-LEARN_AHEAD = 600          # seconds: show learning cards up to 10 min early (Anki: 20 min)
+LEARN_AHEAD = 600          # seconds: pull a learning card early - only when nothing else is left
+
 
 
 def now():
@@ -262,13 +263,19 @@ class DB:
         learning = q("SELECT COUNT(*) FROM card c JOIN item i ON i.id=c.item_id "
                      "WHERE c.suspended=0 AND i.suspended=0 AND c.state IN "
                      "('learning','relearning') AND c.due<=?" + where,
-                     [t + LEARN_AHEAD] + args)
+                     [t] + args)
         new_left = q("SELECT COUNT(*) FROM card c JOIN item i ON i.id=c.item_id "
                      "WHERE c.suspended=0 AND i.suspended=0 AND c.state='new'" + where, args)
         return {"due": due, "learning": learning, "new": new_left}
 
     def next_card(self, deck_id=None):
-        """The card to show now: learning first, then most-overdue review, then new."""
+        """The card to show now.
+
+        Order, like Anki: learning cards that are really due, then the most
+        overdue review card, then a new card. A card that is still inside its
+        learning step is only pulled early (LEARN_AHEAD) when nothing else is
+        waiting - otherwise the card you just graded would come straight back.
+        """
         t = now()
         where, args = "", []
         if deck_id:
@@ -276,33 +283,39 @@ class DB:
             args = [deck_id]
         base = ("SELECT c.id FROM card c JOIN item i ON i.id=c.item_id "
                 "WHERE c.suspended=0 AND i.suspended=0 ")
-        for state in ("learning", "relearning"):
+
+        def pick(cond, params):
             row = self.conn.execute(
-                base + f"AND c.state='{state}' AND c.due<=?" + where +
-                " ORDER BY c.due LIMIT 1", [t + LEARN_AHEAD] + args).fetchone()
-            if row:
-                return self.card(row["id"])
-        row = self.conn.execute(
-            base + "AND c.state='review' AND c.due<=?" + where +
-            " ORDER BY c.due LIMIT 1", [t] + args).fetchone()
-        if row:
-            return self.card(row["id"])
-        # new cards, only if today's allowance is not used up
+                base + cond + where + " ORDER BY c.due LIMIT 1",
+                list(params) + args).fetchone()
+            return self.card(row["id"]) if row else None
+
+        LEARN = "AND c.state IN ('learning','relearning') AND c.due<=?"
+
+        card = pick(LEARN, [t])
+        if card:
+            return card
+
+        card = pick("AND c.state='review' AND c.due<=?", [t])
+        if card:
+            return card
+
+        # a new card, only if today's allowance is not used up
         if deck_id:
             deck = self.deck(deck_id)
         else:
             row = self.conn.execute(
                 "SELECT id FROM deck ORDER BY sort_order LIMIT 1").fetchone()
             deck = self.deck(row["id"]) if row else None
-        if deck:
-            remaining = self.new_remaining(deck)
-            if remaining > 0:
-                row = self.conn.execute(
-                    base + "AND c.state='new'" + where + " ORDER BY c.id LIMIT 1",
-                    args).fetchone()
-                if row:
-                    return self.card(row["id"])
-        return None
+        if deck and self.new_remaining(deck) > 0:
+            row = self.conn.execute(
+                base + "AND c.state='new'" + where + " ORDER BY c.id LIMIT 1",
+                args).fetchone()
+            if row:
+                return self.card(row["id"])
+
+        # nothing else left: show a learning card that is due within LEARN_AHEAD
+        return pick(LEARN, [t + LEARN_AHEAD])
 
     def next_due(self, deck_id=None):
         """When is the next card due (seconds from now)? None if nothing is scheduled."""
