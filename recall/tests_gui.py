@@ -74,6 +74,63 @@ def screenshot(app, path):
     os.remove(root_png)
 
 
+def check_reset(app):
+    """The reset buttons: one card in Browse, one deck and everything in Settings."""
+    from tkinter import messagebox
+    yes = lambda *a, **k: True
+    messagebox.askyesno = yes
+    import screen_browse
+    import screen_settings
+    screen_browse.messagebox.askyesno = yes
+    screen_settings.messagebox.askyesno = yes
+
+    deck = app.db.decks()[0]
+    app.show("study")
+    app.root.update()
+    study = app.screens["study"]
+    for _ in range(3):
+        if not study.card:
+            break
+        study.reveal()
+        study.grade(3)
+        app.root.update()
+    assert app.db.review_count() > 0, "nothing to reset"
+
+    # --- one card, from Browse
+    app.show("browse")
+    app.root.update()
+    br = app.screens["browse"]
+    learned = [iid for iid in br.tree.get_children()
+               if app.db.card(app.db.card_ids_for_item(int(iid))[0])["state"] != "new"]
+    assert learned, "the study flow left no learned card"
+    br.tree.selection_set(learned[0])
+    before = app.db.review_count()
+    br.reset_selected()
+    app.root.update()
+    for cid in app.db.card_ids_for_item(int(learned[0])):
+        c = app.db.card(cid)
+        assert c["state"] == "new" and c["stability"] is None and c["due"] == 0, dict(c)
+    assert app.db.review_count() < before, "history of the card was kept"
+
+    # --- one deck, then everything, from Settings
+    app.show("settings")
+    app.root.update()
+    st = app.screens["settings"]
+    st.reset_deck()
+    app.root.update()
+    assert set(app.db.state_counts(deck["id"])) <= {"new"}
+    st.reset_everything()
+    app.root.update()
+    assert set(app.db.state_counts()) == {"new"} and app.db.review_count() == 0
+
+    folder = os.path.dirname(os.path.abspath(app.db.path))
+    baks = [f for f in os.listdir(folder) if f.startswith("before-reset-")]
+    assert baks, "no safety backup was written"
+    for f in baks:
+        os.remove(os.path.join(folder, f))
+    print("  reset buttons work: card, deck, everything — with a safety backup")
+
+
 def main():
     shots = sys.argv[1] if len(sys.argv) > 1 else None
     if shots:
@@ -125,6 +182,7 @@ def main():
         assert set(app.sched.preview(study.card)) == {1, 2, 3, 4}
         study.grade(3)
         app.root.update()
+    check_reset(app)
     print(f"gui check done — {problems} layout problem(s)")
     app.root.destroy()
     return 1 if problems else 0

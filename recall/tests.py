@@ -256,6 +256,42 @@ def test_graded_card_does_not_come_back_immediately():
     print("  a graded learning card stays out until its step is over")
 
 
+def test_reset_card_deck_and_everything():
+    """Reset means: as fresh as imported - no schedule, no history, cards kept."""
+    db, s = fresh()
+    d1 = db.decks()[0]
+    db.add_deck("Second")
+    d2 = db.deck_by_name("Second")
+    a = add(db, d1["id"], "a", "A")
+    b = add(db, d1["id"], "b", "B")
+    c = add(db, d2["id"], "c", "C")
+    for card in (a, b, c):
+        s.grade(db.card(card["id"]), 4)
+    assert db.review_count() == 3
+
+    # one card
+    assert db.reset_card(a["id"]) == 1
+    ca = db.card(a["id"])
+    assert ca["state"] == "new" and ca["due"] == 0 and ca["stability"] is None
+    assert ca["reps"] == 0 and ca["lapses"] == 0 and ca["introduced_at"] is None
+    assert db.review_count() == 2 and db.card(b["id"])["state"] == "review"
+
+    # one deck: its cards only, and the cards themselves stay
+    assert db.reset_deck(d1["id"]) == 2
+    assert db.card(b["id"])["state"] == "new"
+    assert db.card(c["id"])["state"] == "review"
+    assert db.review_count() == 1
+    assert len(db.items(d1["id"])) == 2 and db.total_cards(d1["id"]) == 2
+
+    # everything: also frees today's new-card allowance
+    assert db.reset_all() == 3
+    assert db.review_count() == 0
+    assert set(db.state_counts()) == {"new"}
+    assert db.new_remaining(db.deck(d1["id"])) == 20
+    assert db.next_card() is not None
+    print("  reset: one card, one deck, everything; history gone, cards kept")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     print(f"running {len(tests)} tests")

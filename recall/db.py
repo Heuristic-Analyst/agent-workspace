@@ -375,6 +375,45 @@ class DB:
         self.conn.commit()
         return row["card_id"]
 
+    # --------------------------------------------------------------- reset
+    def _reset_cards(self, where, args=(), forget_history=True):
+        """Back to brand new: no schedule, no history. Returns how many cards."""
+        ids = [r["id"] for r in self.conn.execute(
+            "SELECT c.id FROM card c JOIN item i ON i.id=c.item_id WHERE " + where, args)]
+        if not ids:
+            return 0
+        marks = ",".join("?" * len(ids))
+        if forget_history:
+            self.conn.execute(f"DELETE FROM review WHERE card_id IN ({marks})", ids)
+        self.conn.execute(
+            "UPDATE card SET state='new', due=0, stability=NULL, difficulty=NULL, "
+            "last_review=NULL, lapses=0, reps=0, step=0, introduced_at=NULL "
+            f"WHERE id IN ({marks})", ids)
+        self.conn.commit()
+        return len(ids)
+
+    def reset_card(self, card_id, forget_history=True):
+        return self._reset_cards("c.id=?", (card_id,), forget_history)
+
+    def reset_item(self, item_id, forget_history=True):
+        """Both directions of one item (forward and reverse) go back to new."""
+        return self._reset_cards("i.id=?", (item_id,), forget_history)
+
+    def reset_deck(self, deck_id, forget_history=True):
+        return self._reset_cards("i.deck_id=?", (deck_id,), forget_history)
+
+    def reset_all(self, forget_history=True):
+        return self._reset_cards("1=1", (), forget_history)
+
+    def review_count(self, deck_id=None):
+        sql = "SELECT COUNT(*) FROM review r JOIN card c ON c.id=r.card_id "
+        sql += "JOIN item i ON i.id=c.item_id WHERE 1=1"
+        args = []
+        if deck_id:
+            sql += " AND i.deck_id=?"
+            args.append(deck_id)
+        return self.conn.execute(sql, args).fetchone()[0]
+
     # --------------------------------------------------------------- stats
     def state_counts(self, deck_id=None):
         sql = ("SELECT c.state, COUNT(*) n FROM card c JOIN item i ON i.id=c.item_id "

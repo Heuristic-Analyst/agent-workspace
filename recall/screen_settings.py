@@ -1,10 +1,11 @@
 """Settings: scheduling per deck, appearance, data."""
 import json
+import os
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 
-from base import Screen
+from base import Screen, forget_study_card
 from db import DEFAULT_PARAMS
 from forms import Field
 from widgets import Button, Panel, ScrollFrame
@@ -109,6 +110,24 @@ class SettingsScreen(Screen):
                color=c["red"], height=38, font_size=10, pad_x=14,
                bg=c["surface"]).pack(side="left")
 
+        # ------------------------------------------------- reset progress
+        tk.Label(b3, text="Reset progress", bg=c["surface"], fg=c["text"],
+                 font=self.theme.font(11, "bold")).pack(anchor="w", pady=(20, 4))
+        reset_note = tk.Label(b3, text="Cards go back to New and lose their schedule and "
+                                        "review history. The cards, the decks and the settings "
+                                        "stay. A backup is written next to the database first.",
+                              bg=c["surface"], fg=c["muted"], font=self.theme.f_small(),
+                              wraplength=620, justify="left")
+        reset_note.pack(anchor="w")
+        row4 = tk.Frame(b3, bg=c["surface"])
+        row4.pack(anchor="w", pady=(10, 0))
+        Button(row4, self.theme, "Reset this deck", command=self.reset_deck,
+               kind="outline", color=c["amber"], height=38, font_size=10, pad_x=18,
+               bg=c["surface"]).pack(side="left", padx=(0, 8))
+        Button(row4, self.theme, "Reset everything", command=self.reset_everything,
+               kind="ghost", color=c["red"], height=38, font_size=10, pad_x=14,
+               bg=c["surface"]).pack(side="left")
+
     # ------------------------------------------------------------------
     def refresh(self):
         names = [d["name"] for d in self.db.decks()]
@@ -207,3 +226,64 @@ class SettingsScreen(Screen):
             self.app.toast.show("Deck deleted", "warn")
             self.refresh()
             self.app.sidebar.refresh_counts()
+
+    # ------------------------------------------------------- reset progress
+    def _safety_backup(self):
+        """A free copy of the database before anything is forgotten."""
+        folder = os.path.dirname(os.path.abspath(self.db.path)) or "."
+        stamp = datetime.now().strftime("%Y-%m-%d-%H%M")
+        path = os.path.join(folder, f"before-reset-{stamp}.db")
+        try:
+            self.db.backup(path)
+            return path
+        except Exception:
+            return None
+
+    def reset_deck(self):
+        row = self._deck_row()
+        if not row:
+            return
+        n = self.db.total_cards(row["id"])
+        if not n:
+            self.app.toast.show("This deck has no cards", "info")
+            return
+        if not messagebox.askyesno(
+                "Reset deck",
+                f"Reset all {n} cards of \u201c{row['name']}\u201d?\n\n"
+                "They all go back to New. Schedule, stability and the entire review "
+                "history of these cards are deleted, so they count as new cards again. "
+                "Prompts, answers and deck settings stay.\n\n"
+                "This cannot be undone.",
+                parent=self.app.root, icon="warning", default="no"):
+            return
+        bak = self._safety_backup()
+        done = self.db.reset_deck(row["id"])
+        self._after_reset(done, bak)
+
+    def reset_everything(self):
+        n = self.db.total_cards()
+        decks = len(self.db.decks())
+        if not n:
+            self.app.toast.show("There is nothing to reset", "info")
+            return
+        if not messagebox.askyesno(
+                "Reset everything",
+                f"Reset all {n} cards in {decks} deck{'s' if decks != 1 else ''}?\n\n"
+                "Every card goes back to New and the complete review history is deleted. "
+                "Cards, decks and settings stay, but all statistics start from zero and "
+                "every card has to be learned again.\n\n"
+                "This cannot be undone.",
+                parent=self.app.root, icon="warning", default="no"):
+            return
+        bak = self._safety_backup()
+        done = self.db.reset_all()
+        self._after_reset(done, bak)
+
+    def _after_reset(self, done, backup_path):
+        msg = f"{done} card{'s' if done != 1 else ''} reset"
+        if backup_path:
+            msg += f" \u2014 backup: {os.path.basename(backup_path)}"
+        self.app.toast.show(msg, "warn")
+        forget_study_card(self.app)
+        self.app.sidebar.refresh_counts()
+        self.refresh()

@@ -4,7 +4,7 @@ import tkinter as tk
 from datetime import datetime
 from tkinter import messagebox, ttk
 
-from base import Screen
+from base import Screen, forget_study_card
 from forms import Field, SearchEntry
 from widgets import Button
 
@@ -82,6 +82,9 @@ class BrowseScreen(Screen):
                color=c["text"], height=38, font_size=10, pad_x=18).pack(side="left")
         Button(actions, self.theme, "Delete", command=self.delete_selected, kind="ghost",
                color=c["red"], height=38, font_size=10, pad_x=18).pack(side="left", padx=6)
+        Button(actions, self.theme, "Reset progress", command=self.reset_selected,
+               kind="outline", color=c["amber"], height=38, font_size=10,
+               pad_x=18).pack(side="left")
         tk.Label(actions, text="Tip: Enter edits, Delete removes.", bg=c["bg"],
                  fg=c["faint"], font=self.theme.f_tiny()).pack(side="right")
 
@@ -134,6 +137,27 @@ class BrowseScreen(Screen):
             self.db.delete_item(item_id)
             self.app.sidebar.refresh_counts()
             self.refresh()
+
+    def reset_selected(self):
+        """Put one card back to new: no schedule, no history, the card itself stays."""
+        item_id = self._selected_item()
+        if not item_id:
+            return
+        item = self.db.item(item_id)
+        n = len(self.db.card_ids_for_item(item_id))
+        if not messagebox.askyesno(
+                "Reset progress",
+                f"Reset this card?\n\n{item['prompt'][:140]}\n\n"
+                f"{n} card side{'s' if n != 1 else ''} go back to New: schedule, "
+                "stability and the whole review history of this card are deleted. "
+                "The card itself stays.\n\nThis cannot be undone.",
+                parent=self.app.root, icon="warning", default="no"):
+            return
+        self.db.reset_item(item_id)
+        forget_study_card(self.app)
+        self.app.toast.show("Card reset — it is new again", "warn")
+        self.app.sidebar.refresh_counts()
+        self.refresh()
 
 
 class ItemDialog(tk.Toplevel):

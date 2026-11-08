@@ -43,3 +43,10 @@ class Screen(tk.Frame):
     def card_panel(self, parent, pad=22, radius=16, fill=None):
         from widgets import Panel
         return Panel(parent, self.theme, pad=pad, radius=radius, fill=fill)
+
+
+def forget_study_card(app):
+    """The queue changed: the study screen should reload instead of a stale card."""
+    screen = app.screens.get("study")
+    if screen is not None:
+        screen.card = None
