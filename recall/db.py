@@ -163,6 +163,15 @@ class DB:
                           (*fields.values(), deck_id))
         self.conn.commit()
 
+    def update_all_decks(self, **fields):
+        """The same scheduling values for every deck at once. Returns how many decks."""
+        if not fields:
+            return 0
+        keys = ", ".join(f"{k}=?" for k in fields)
+        cur = self.conn.execute(f"UPDATE deck SET {keys}", tuple(fields.values()))
+        self.conn.commit()
+        return cur.rowcount
+
     def delete_deck(self, deck_id):
         self.conn.execute("DELETE FROM deck WHERE id=?", (deck_id,))
         self.conn.commit()

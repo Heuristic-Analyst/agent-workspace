@@ -292,6 +292,29 @@ def test_reset_card_deck_and_everything():
     print("  reset: one card, one deck, everything; history gone, cards kept")
 
 
+def test_update_all_decks():
+    """One call sets the scheduling for every deck - and the scheduler follows it."""
+    db, s = fresh()
+    db.add_deck("Second")
+    db.add_deck("Third")
+    n = db.update_all_decks(new_per_day=7, reviews_per_day=120, max_interval=365,
+                            desired_retention=0.85, learn_steps="[1, 5, 20]",
+                            relearn_steps="[15]")
+    assert n == 3, n
+    for row in db.decks():
+        d = db.deck(row["id"])
+        assert d["new_per_day"] == 7 and d["reviews_per_day"] == 120
+        assert d["max_interval"] == 365
+        assert abs((d["desired_retention"] or 0) - 0.85) < 1e-9
+        assert d["learn_steps"] == "[1, 5, 20]" and d["relearn_steps"] == "[15]"
+        settings = s.settings(d)
+        assert settings["learn"] == [1.0, 5.0, 20.0], settings
+        assert settings["relearn"] == [15.0]
+    # the cards themselves are untouched
+    assert db.total_cards() == 0
+    print("  one setting change reaches every deck, scheduler included")
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     print(f"running {len(tests)} tests")

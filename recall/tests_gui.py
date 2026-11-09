@@ -131,6 +131,43 @@ def check_reset(app):
     print("  reset buttons work: card, deck, everything — with a safety backup")
 
 
+def check_global_settings(app):
+    """'Save for all decks' writes the form to every deck, a single save stays local."""
+    from tkinter import messagebox
+    yes = lambda *a, **k: True
+    messagebox.askyesno = yes
+    import screen_settings
+    screen_settings.messagebox.askyesno = yes
+
+    db = app.db
+    if not db.deck_by_name("Second deck"):
+        db.add_deck("Second deck")
+    app.show("settings")
+    for _ in range(3):
+        app.root.update()
+    st = app.screens["settings"]
+    st.f_new.set("7")
+    st.f_maxint.set("365")
+    st.retention.set(85)
+    st.save_all()
+    app.root.update()
+    for row in db.decks():
+        d = db.deck(row["id"])
+        assert d["new_per_day"] == 7, dict(d)
+        assert d["max_interval"] == 365, dict(d)
+        assert abs((d["desired_retention"] or 0) - 0.85) < 1e-9, dict(d)
+
+    # the single-deck save must still leave the others alone
+    selected = st.deck.get()
+    st.f_new.set("3")
+    st.save()
+    app.root.update()
+    assert db.deck_by_name(selected)["new_per_day"] == 3
+    others = [db.deck(r["id"]) for r in db.decks() if r["name"] != selected]
+    assert others and all(d["new_per_day"] == 7 for d in others), "single save leaked"
+    print("  global settings: one click writes every deck, single save stays local")
+
+
 def main():
     shots = sys.argv[1] if len(sys.argv) > 1 else None
     if shots:
@@ -183,6 +220,7 @@ def main():
         study.grade(3)
         app.root.update()
     check_reset(app)
+    check_global_settings(app)
     print(f"gui check done — {problems} layout problem(s)")
     app.root.destroy()
     return 1 if problems else 0

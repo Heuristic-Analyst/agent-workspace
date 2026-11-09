@@ -68,9 +68,17 @@ class SettingsScreen(Screen):
         Button(btns, self.theme, "Save settings", command=self.save, kind="solid",
                color=c["accent"], height=40, font_size=10, pad_x=22,
                bg=c["surface"]).pack(side="left")
+        Button(btns, self.theme, "Save for all decks", command=self.save_all,
+               kind="outline", color=c["accent"], height=40, font_size=10, pad_x=18,
+               bg=c["surface"]).pack(side="left", padx=8)
         Button(btns, self.theme, "Reset FSRS parameters", command=self.reset_params,
                kind="outline", color=c["muted"], height=40, font_size=10, pad_x=18,
-               bg=c["surface"]).pack(side="left", padx=8)
+               bg=c["surface"]).pack(side="left")
+        tk.Label(b, text="\u201cSave settings\u201d writes the deck selected above. "
+                         "\u201cSave for all decks\u201d writes the same values to every "
+                         "deck at once \u2014 handy when all your decks should behave alike.",
+                 bg=c["surface"], fg=c["faint"], font=self.theme.f_tiny(),
+                 wraplength=620, justify="left").pack(anchor="w", pady=(8, 0))
 
         # ---------------------------------------------------- appearance
         p2 = Panel(root, self.theme, pad=20, radius=16)
@@ -154,10 +162,8 @@ class SettingsScreen(Screen):
         self.f_retention_note.set(f"{(row['desired_retention'] or 0.9) * 100:.0f}% — "
                                   f"review right before you would forget")
 
-    def save(self):
-        row = self._deck_row()
-        if not row:
-            return
+    def _form_values(self):
+        """The scheduling values as deck fields; None if the form holds no numbers."""
         try:
             new_per_day = max(0, int(self.f_new.get()))
             reviews_per_day = max(0, int(self.f_reviews.get()))
@@ -166,17 +172,50 @@ class SettingsScreen(Screen):
             relearn = [float(x) for x in self.f_relearn.get().replace(" ", "").split(",") if x]
         except ValueError:
             self.app.toast.show("Those numbers are not all numbers", "err")
-            return
+            return None
         if not learn:
             learn = [1.0, 10.0]
         if not relearn:
             relearn = [10.0]
-        self.db.update_deck(row["id"], desired_retention=self.retention.get() / 100.0,
-                            new_per_day=new_per_day, reviews_per_day=reviews_per_day,
-                            max_interval=max_interval,
-                            learn_steps=json.dumps(learn),
-                            relearn_steps=json.dumps(relearn))
+        return {"desired_retention": self.retention.get() / 100.0,
+                "new_per_day": new_per_day, "reviews_per_day": reviews_per_day,
+                "max_interval": max_interval,
+                "learn_steps": json.dumps(learn),
+                "relearn_steps": json.dumps(relearn)}
+
+    def save(self):
+        row = self._deck_row()
+        if not row:
+            return
+        values = self._form_values()
+        if values is None:
+            return
+        self.db.update_deck(row["id"], **values)
         self.app.toast.show("Settings saved")
+        self.load_deck()
+        self.app.sidebar.refresh_counts()
+
+    def save_all(self):
+        """The values above, written to every deck at once."""
+        values = self._form_values()
+        if values is None:
+            return
+        decks = self.db.decks()
+        if len(decks) < 2:
+            self.save()
+            return
+        if not messagebox.askyesno(
+                "Save for all decks",
+                f"Write these values to all {len(decks)} decks?\n\n"
+                "Desired retention, new cards per day, max reviews per day, max interval "
+                "and the learning steps are overwritten in every deck, including the one "
+                "selected above. The FSRS parameters, the cards and your progress are not "
+                "touched.\n\n"
+                "Any deck can be changed back on its own afterwards.",
+                parent=self.app.root, default="no"):
+            return
+        done = self.db.update_all_decks(**values)
+        self.app.toast.show(f"Same settings written to {done} decks", "warn")
         self.load_deck()
         self.app.sidebar.refresh_counts()
 
